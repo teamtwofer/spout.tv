@@ -2,6 +2,7 @@ package spouttv
 
 import(
   "testing"
+  "fmt"
 )
 
 var validEmails = []string {
@@ -22,9 +23,9 @@ func TestValidateEmail(t *testing.T) {
     v, err := ValidateEmail(email)
     if v != true && err == nil {
       t.Error(
-          "For", email, 
-          "expected", true,
-          "got", false,
+        "For", email, 
+        "expected", true,
+        "got", false,
       )
     }
   }
@@ -32,10 +33,66 @@ func TestValidateEmail(t *testing.T) {
     v, err := ValidateEmail(email)
     if v != false && err == nil {
       t.Error(
-          "For", email, 
-          "expected", false,
-          "got", true,
+        "For", email, 
+        "expected", false,
+        "got", true,
       )
     }
+  }
+}
+
+func TestCreateUser(t *testing.T) {
+  nu := &NewUser{
+    Name:     "Ben Bayard",
+    Email:    "b.j.bayard@gmail.com",
+    Password: "potato",
+  }
+
+  user, err := CreateUser(*nu)
+
+  if err == nil && user.Email != "" && user.Name != "" && user.EncryptedPassword != nil {
+    fmt.Println(user.LastSignInAt)
+    fmt.Println(user.CreatedAt)
+    fmt.Println(user.UpdatedAt)
+    if (user.LastSignInAt == 0 || user.CreatedAt == 0 || user.UpdatedAt == 0) {
+      t.Error("Signin, Createdat or updatedat were not set")  
+    }
+  } else {  
+    t.Error("User, name or password was not set")  
+  }
+}
+
+func TestCreateUser_2(t *testing.T) {
+  // invalid email!
+  nu := &NewUser{
+    Name:     "Ben Bayard",
+    Email:    "b.j.bayardgmail.com",
+    Password: "potato",
+  }
+
+  user, err := CreateUser(*nu)
+
+  if err == nil {
+    t.Error(
+      "For", user.Email, 
+      "expected error to be nil",
+      "but it wasn't dawg",
+    )
+  }
+}
+
+func BenchmarkEncryptPassword(b *testing.B) {
+  pass := []byte("password")
+  for i := 0; i < b.N; i++ {
+    ep, _ := EncryptPassword(pass)
+    if ep != nil {
+
+    }
+  }
+}
+
+func BenchmarkRandString(b *testing.B) {
+  for i := 0; i < b.N; i++ {
+    p := RandString(30)
   }
 }

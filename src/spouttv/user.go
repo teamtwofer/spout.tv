@@ -23,7 +23,7 @@ type User struct {
   LastSignInAt      int64         `json:"last_signin_at"`
   CreatedAt         int64         `json:"created_at"`
   UpdatedAt         int64         `json:"updated_at"`
-  LoginToken        string        `json:"token"`
+  LoginToken        string        `json:"token" bson:"token"`
 }
 
 // you use clear because it removed the password in plain text from memory. 
@@ -112,7 +112,7 @@ func CreateUser(newUser NewUser) (user *User, userErr error) {
 
       err = c.Insert(user)
       if err != nil {
-        panic(err)
+        // panic(err)
         userErr = fmt.Errorf("Duplicate Field")
       }
     }
@@ -134,25 +134,44 @@ func EncryptPassword(password []byte) ([]byte, error) {
 }
 
 func LoginToken(tmpUser LoginUser) (User, error) {
-  defer clear(password)
+  defer clear([]byte(tmpUser.Password))
+
+  user := &User{}
+
+  session, err := mgo.Dial("localhost:27017")
+  if err != nil {
+    panic(err)
+  }
   defer session.Close()
 
-  // ep, _:= bcrypt.GenerateFromPassword(password, bcrypt.DefaultCost)
-  err := bcrypt.CompareHashAndPassword(user.EncryptedPassword, password)
+  // Optional. Switch the session to a monotonic behavior.
+  session.SetMode(mgo.Monotonic, true)
+
+  c := session.DB("spouttv").C("users")
 
   if tmpUser.Email != "" {
     // find user by email
-    
+    c.Find(bson.M{"email":tmpUser.Email}).One(&user);
+  } else {
+    c.Find(bson.M{"username":tmpUser.Username}).One(&user);
   }
 
-  if err != nil {
+  err = bcrypt.CompareHashAndPassword(user.EncryptedPassword, []byte(tmpUser.Password))
 
-    return fmt.Errorf("Invalid Password")
+  if err != nil {
+    return *user, fmt.Errorf("Invalid Password")
   } else {
     token := RandString(30)
     user.LoginToken = token;
 
-    return nil
+    err := c.Update(bson.M{"email": user.Email}, user)
+
+
+    if err != nil {
+      panic(err)
+    }
+
+    return *user, nil
   }
   // *user.LastSignInAt = time.Now().Unix()
 }

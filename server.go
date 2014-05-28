@@ -18,7 +18,7 @@ func main() {
   // user.Name = "potato"
   // fmt.Println(user.Name)
 
-  _ = spouttv.FindUserById("538382a73495963937a20eb2")
+  // _ = spouttv.FindUserById("538382a73495963937a20eb2")
 
   // fmt.Printf("%#v \n", u)
 
@@ -30,6 +30,24 @@ func main() {
 
 func handleIndex(writer http.ResponseWriter, request *http.Request) {
   writer.Header().Set("Content-Type", "text/html")
+  fileName := ""
+  fmt.Println(request.URL.Path)
+  switch request.URL.Path {
+  case "/":
+    fileName = "index.html"
+  case "/application.js":
+    fileName = "application.js"
+  case "/style.css":
+    fileName = "style.css"
+  }
+
+  fmt.Println(fileName)
+
+  if fileName == "" {
+    http.Error(writer, "Page Not Found", 404)
+  } else {
+    http.ServeFile(writer, request, "assets/"+fileName)
+  }
 }
 
 func handleUser(writer http.ResponseWriter, request *http.Request) {
@@ -38,10 +56,6 @@ func handleUser(writer http.ResponseWriter, request *http.Request) {
   // 2) Create an account
   // This means no GET allowed!
   writer.Header().Set("Content-Type", "application/json")
-  // if request.Method == "GET" {
-  //   // this is a 404 whattttttt
-  //   http.Error(writer, "Page Not Found "+msg, 404)
-  // } else if request.Metho
   switch request.Method {
   case "GET":
     http.Error(writer, "Page Not Found", http.StatusNotFound)
@@ -95,6 +109,7 @@ func handleLogin(writer http.ResponseWriter, request *http.Request) {
   body, err := ioutil.ReadAll(request.Body)
   if err != nil {
     panic(err.Error())
+    // http.Error(writer, "Invalid or Missing Parameters", 403)
   }
 
   json.Unmarshal(body, tmpUser)
@@ -105,15 +120,17 @@ func handleLogin(writer http.ResponseWriter, request *http.Request) {
     if tmpUser.Password == "" {
       http.Error(writer, "Invalid or Missing Parameters", 403)
     } else {
-      user, err := spouttv.LoginToken(tmpUser)
+      user, err := spouttv.LoginToken(*tmpUser)
       if err != nil {
-        panic(err)
+        // panic(err)
+        http.Error(writer, "Invalid Username or Password", 403)
+      } else {
+        data, err := json.Marshal(user)
+        if err != nil {
+          panic(err.Error())
+        }
+        fmt.Fprintf(writer, string(data))        
       }
-      data, err := json.Marshal(user)
-      if err != nil {
-        panic(err.Error())
-      }
-      fmt.Fprintf(writer, string(data))
     }
   }
 }

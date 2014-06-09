@@ -15,15 +15,16 @@ import (
 )
 
 type User struct {
-  Id                bson.ObjectId `json:"id" bson:"_id,omitempty"`
-  Name              string        `json:"name"`
-  Email             string        `json:"email"`
-  Username          string        `json:"email"`
-  EncryptedPassword []byte        `json:"password"`
-  LastSignInAt      int64         `json:"last_signin_at"`
-  CreatedAt         int64         `json:"created_at"`
-  UpdatedAt         int64         `json:"updated_at"`
-  LoginToken        string        `json:"token" bson:"token"`
+  Id                bson.ObjectId   `json:"id"        bson:"_id,omitempty"`
+  Following         []bson.ObjectId `json:"following" bson:"following"`
+  Session           bson.ObjectId   `json:"session"   bson:"session,omitempty"`
+  Name              string          `json:"name"`
+  Email             string          `json:"email"`
+  Username          string          `json:"username"`
+  EncryptedPassword []byte          `json:"password"`
+  LastSignInAt      int64           `json:"last_signin_at"`
+  CreatedAt         int64           `json:"created_at"`
+  UpdatedAt         int64           `json:"updated_at"`
 }
 
 // you use clear because it removed the password in plain text from memory. 
@@ -78,21 +79,45 @@ func CreateUser(newUser NewUser) (user *User, userErr error) {
     }
 
     if err == nil {
+      // session, err := mgo.Dial("localhost:27017")
+      // if err != nil {
+      //   panic(err)
+      // }
+      // defer session.Close()
       user.LastSignInAt = time.Now().Unix()
       user.CreatedAt    = time.Now().Unix()
       user.UpdatedAt    = time.Now().Unix()
-      user.LoginToken   = RandString(30)
-
-      session, err := mgo.Dial("localhost:27017")
-      if err != nil {
-        panic(err)
+      userSession := &Session{
+        Token:     RandString(30),
+        Id:        bson.NewObjectId(),
+        CreatedAt: time.Now(),
       }
+
+      indexSession := mgo.Index{
+          Key: []string{"created_at"},
+          DropDups: true,
+          ExpireAfter: 24*time.Hour,
+      }
+
+      session, c, err := GetUserCollection()
       defer session.Close()
+      
+      if err != nil {
+        panic(err.Error())
+      }
+      sessionCollection := session.DB("spouttv").C("sessions")
+
+      usererr := sessionCollection.EnsureIndex(indexSession)
+      if usererr != nil {
+        panic(usererr.Error())
+      }
+
+      sessionCollection.Insert(userSession)
+      user.Session = userSession.Id
+      // user.LoginToken   = RandString(30)
 
       // Optional. Switch the session to a monotonic behavior.
       session.SetMode(mgo.Monotonic, true)
-
-      c := session.DB("spouttv").C("users")
 
       // Index
       index := mgo.Index{
@@ -162,9 +187,29 @@ func LoginToken(tmpUser LoginUser) (User, error) {
     return *user, fmt.Errorf("Invalid Password")
   } else {
     token := RandString(30)
-    user.LoginToken = token;
 
-    err := c.Update(bson.M{"email": user.Email}, user)
+    newTime := time.Now();
+    userSession := &Session{
+      Token: token,
+      Id:    bson.NewObjectId(),
+      CreatedAt: newTime,
+    }
+
+    // expireTime := newTime.Add(10*time.Second);
+
+    indexSession := mgo.Index{
+        Key: []string{"created_at"},
+        ExpireAfter: 24*time.Hour,
+    }
+
+    sessionCollection := session.DB("spouttv").C("sessions")
+
+    sessionCollection.EnsureIndex(indexSession)
+    sessionCollection.Insert(userSession)
+    user.Session = userSession.Id
+    // user.LoginToken = token;
+
+    err := c.Update(bson.M{"session": user.Session}, user)
 
 
     if err != nil {
